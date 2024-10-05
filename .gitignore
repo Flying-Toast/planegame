@@ -1,0 +1,5 @@
+*.o
+/planegame
+compile_commands.json
+.cache
+.depends
