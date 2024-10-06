@@ -8,13 +8,36 @@ enum modelkey {
 	MODEL_MONKEY,
 };
 
+struct vec2 {
+	float coords[2];
+};
+
+struct vec3 {
+	float coords[3];
+};
+
 struct vert {
-	float pos[3];
+	size_t point_idx;
+	size_t uv_idx;
+	size_t norm_idx;
+};
+
+struct face {
+	struct vert verts[3];
 };
 
 struct model {
-	struct vert *verts;
-	size_t nverts;
+	struct vec3 *points;
+	size_t npoints;
+
+	struct vec3 *norms;
+	size_t nnorms;
+
+	struct vec2 *uvs;
+	size_t nuvs;
+
+	struct face *faces;
+	size_t nfaces;
 };
 
 Err getmodel(enum modelkey key, const struct model **out);

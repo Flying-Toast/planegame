@@ -1,4 +1,5 @@
 #include "model.h"
+#include <assert.h>
 #include <err.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -7,11 +8,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define ARRAY_LEN(arr) (sizeof(arr)/sizeof((arr)[0]))
+#define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr[0])))
 
 #define CACHEMODEL(path, storage, out) \
 	({ \
-		if (storage.verts == NULL) { \
+		if (storage.faces == NULL) { \
 			Err __err = readobj(path, &storage); \
 			if (__err) \
 				return __err; \
@@ -40,37 +41,43 @@ static bool strneq(const char *a, const char *b, size_t n) {
 	return true;
 }
 
-static size_t countlines(const char *string, const char *starts_with) {
-	size_t n = 0, swlen = strlen(starts_with);
-	bool first = true;
-	while (*string) {
-		if (first && strneq(string, starts_with, swlen))
-			n++;
-
-		first = *string == '\n';
-		string++;
+// Advance string the the first character of the next line.
+// Return false iff end of string is reached.
+static bool nextline(const char **string) {
+	const char *s = *string;
+	bool ret = false;
+	while (*s) {
+		if (*(s++) == '\n') {
+			ret = true;
+			break;
+		}
 	}
-	return n;
+	*string = s;
+	return ret && *s;
 }
 
-static bool advance_past_line_start(const char **string, const char *starts_with) {
-	size_t swlen = strlen(starts_with);
-	const char *s = *string;
-	bool ret = true;
-
-	while (!strneq(s, starts_with, swlen)) {
-		if (*s == '\0') {
-			ret = false;
-			goto eos;
-		}
-
-		while (*(s++) != '\n')
-			;
-	}
-	s += swlen;
-eos:
-	*string = s;
-	return ret;
+static void countlines(
+	const char *string,
+	size_t *npoints_out,
+	size_t *nfaces_out,
+	size_t *nuvs_out,
+	size_t *nnorms_out
+) {
+	size_t npoints = 0, nfaces = 0, nuvs = 0, nnorms = 0;
+	do {
+		if (strneq(string, "v ", 2))
+			npoints++;
+		else if (strneq(string, "f ", 2))
+			nfaces++;
+		else if (strneq(string, "vt ", 3))
+			nuvs++;
+		else if (strneq(string, "vn ", 3))
+			nnorms++;
+	} while (nextline(&string));
+	*npoints_out = npoints;
+	*nfaces_out = nfaces;
+	*nuvs_out = nuvs;
+	*nnorms_out = nnorms;
 }
 
 static Err parsefloat(const char **string, float *out) {
@@ -89,29 +96,124 @@ static Err parsefloat(const char **string, float *out) {
 	return ERR_OK;
 }
 
-static Err parseobj(const char *s, struct model *out) {
-	size_t nverts = countlines(s, "v ");
-	out->nverts = nverts;
-	// we leak this; it gets cached in getmodel()
-	struct vert *verts = malloc(sizeof(struct vert) * nverts);
+static Err parsefloats(const char **string, size_t n, float *outlist) {
+	const char *s = *string;
 
-	for (size_t i = 0; i < nverts; i++) {
-		if (!advance_past_line_start(&s, "v "))
-			goto err_free;
-
-		size_t npos = ARRAY_LEN(verts[i].pos);
-		for (size_t pi = 0; pi < npos; pi++) {
-			if (parsefloat(&s, &verts[i].pos[pi]))
-				goto err_free;
-			if (pi != npos - 1 && *(s++) != ' ')
-				goto err_free;
-		}
+	for (size_t i = 0; i < n; i++) {
+		if (parsefloat(&s, &outlist[i]))
+			return ERR_PARSEOBJ;
+		if (i != n - 1 && (!*s || *(s++) != ' '))
+			return ERR_PARSEOBJ;
 	}
 
-	out->verts = verts;
+	*string = s;
+	return ERR_OK;
+}
+
+static Err parseindex(const char **string, size_t *out) {
+	const char *s = *string;
+
+	if (*s == '\0')
+		return ERR_PARSEOBJ;
+
+	char *endptr;
+	size_t parsed = strtoul(s, &endptr, 10);
+	if (endptr == s)
+		return ERR_PARSEOBJ;
+
+	*out = parsed;
+	*string = endptr;
+	return ERR_OK;
+}
+
+static Err parsevert(const char **string, struct vert *out) {
+	const char *s = *string;
+
+	if (*s == '\0')
+		return ERR_PARSEOBJ;
+
+	size_t parts[3];
+	for (size_t i = 0; i < ARRAY_LEN(parts); i++) {
+		if (parseindex(&s, &parts[i]))
+			return ERR_PARSEOBJ;
+		if (i != ARRAY_LEN(parts) - 1 && (!*s || *(s++) != '/'))
+			return ERR_PARSEOBJ;
+	}
+
+	out->point_idx = parts[0];
+	out->uv_idx = parts[1];
+	out->norm_idx = parts[2];
+	*string = s;
+	return ERR_OK;
+}
+
+static Err parseverts(const char **string, size_t n, struct vert *outlist) {
+	const char *s = *string;
+
+	for (size_t i = 0; i < n; i++) {
+		if (parsevert(&s, &outlist[i]))
+			return ERR_PARSEOBJ;
+		if (i != n - 1 && (!*s || *(s++) != ' '))
+			return ERR_PARSEOBJ;
+	}
+
+	*string = s;
+	return ERR_OK;
+}
+
+static Err parseobj(const char *s, struct model *out) {
+	size_t npoints, nfaces, nuvs, nnorms;
+	countlines(s, &npoints, &nfaces, &nuvs, &nnorms);
+	// we leak these; the model gets cached in getmodel()
+	struct vec3 *points = malloc(sizeof(struct vec3) * npoints);
+	struct vec3 *norms = malloc(sizeof(struct vec3) * nnorms);
+	struct face *faces = malloc(sizeof(struct face) * nfaces);
+	struct vec2 *uvs = malloc(sizeof(struct vec2) * nuvs);
+
+	size_t curpoint = 0, curface = 0, curuv = 0, curnorm = 0;
+
+	do {
+		if (strneq(s, "v ", 2)) {
+			s += 2; // skip "v "
+			assert(curpoint < npoints);
+			if (parsefloats(&s, 3, points[curpoint].coords))
+				goto err_free;
+			curpoint++;
+		} else if (strneq(s, "vt ", 3)) {
+			s += 3; // skip "vt "
+			assert(curuv < nuvs);
+			if (parsefloats(&s, 2, uvs[curuv].coords))
+				goto err_free;
+			curuv++;
+		} else if (strneq(s, "vn ", 3)) {
+			s += 3; // skip "vn "
+			assert(curnorm < nnorms);
+			if (parsefloats(&s, 3, norms[curnorm].coords))
+				goto err_free;
+			curnorm++;
+		} else if (strneq(s, "f ", 2)) {
+			s += 2; // skip "f "
+			assert(curface < nfaces);
+			if (parseverts(&s, 3, faces[curface].verts))
+				goto err_free;
+			curface++;
+		}
+	} while(nextline(&s));
+
+	out->points = points;
+	out->npoints = npoints;
+	out->norms = norms;
+	out->nnorms = nnorms;
+	out->faces = faces;
+	out->nfaces = nfaces;
+	out->uvs = uvs;
+	out->nuvs = nuvs;
 	return ERR_OK;
 err_free:
-	free(out->verts);
+	free(points);
+	free(norms);
+	free(faces);
+	free(uvs);
 	return ERR_PARSEOBJ;
 }
 
