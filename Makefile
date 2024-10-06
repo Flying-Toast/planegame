@@ -1,6 +1,6 @@
 CC=clang
 CFLAGS=-Wall -Wextra -Wpedantic -std=c99
-LIBS=-lglfw -lGL
+LIBS=-lSDL2 -lGL
 OBJECTS=main.o model.o
 
 .PHONY: run
