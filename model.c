@@ -10,25 +10,24 @@
 
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr[0])))
 
-#define CACHEMODEL(path, storage, out) \
-	({ \
-		if (storage.faces == NULL) { \
-			Err __err = readobj(path, &storage); \
-			if (__err) \
-				return __err; \
-		} \
-		*out = &storage; \
-		ERR_OK; \
-	})
-
 static Err readobj(const char *path, struct model *out);
 
 static struct model monkey;
 
+static Err cachemodel(const char *path, struct model *storage, const struct model **out) {
+	if (storage->faces == NULL) {
+		Err err = readobj(path, storage);
+		if (err)
+			return err;
+	}
+	*out = storage;
+	return ERR_OK;
+}
+
 Err getmodel(enum modelkey key, const struct model **out) {
 	switch (key) {
 		case MODEL_MONKEY:
-			return CACHEMODEL("data/monkey.obj", monkey, out);
+			return cachemodel("data/monkey.obj", &monkey, out);
 	}
 	errx(1, "invalid modelkey %d\n", key);
 }

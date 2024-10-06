@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=-Wall -Wextra
+CFLAGS=-Wall -Wextra -Wpedantic -std=c99
 LIBS=-lglfw -lGL
 OBJECTS=main.o model.o
 
