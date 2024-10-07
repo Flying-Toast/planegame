@@ -171,6 +171,7 @@ static Err parsefloats(const char **string, size_t n, float *outlist) {
 	return ERR_OK;
 }
 
+// subtracts one from the output to make it zero-based
 static Err parseindex(const char **string, size_t *out) {
 	const char *s = *string;
 
@@ -178,11 +179,16 @@ static Err parseindex(const char **string, size_t *out) {
 		return ERR_PARSEOBJ;
 
 	char *endptr;
-	size_t parsed = strtoul(s, &endptr, 10);
+	unsigned long parsed = strtoul(s, &endptr, 10);
 	if (endptr == s)
 		return ERR_PARSEOBJ;
 
-	*out = parsed;
+	if (parsed == 0) {
+		fprintf(stderr, "index is 0 but .obj indices should start at 1\n");
+		return ERR_PARSEOBJ;
+	}
+
+	*out = parsed - 1;
 	*string = endptr;
 	return ERR_OK;
 }
@@ -257,6 +263,36 @@ static Err parseobj(const char *s, struct model *out) {
 			assert(curface < nfaces);
 			if (parseverts(&s, 3, faces[curface].verts))
 				goto err_free;
+			for (size_t i = 0; i < 3; i++) {
+				struct vert *v = &faces[curface].verts[i];
+				if (v->norm_idx >= nnorms) {
+					fprintf(
+						stderr,
+						"norm idx %lu out of range (max %lu)\n"
+						, v->norm_idx
+						, nnorms - 1
+					);
+					goto err_free;
+				}
+				if (v->point_idx >= npoints) {
+					fprintf(
+						stderr,
+						"point idx %lu out of range (max %lu)\n"
+						, v->point_idx
+						, npoints - 1
+					);
+					goto err_free;
+				}
+				if (v->uv_idx >= nuvs) {
+					fprintf(
+						stderr,
+						"uv idx %lu out of range (max %lu)\n"
+						, v->uv_idx
+						, nuvs - 1
+					);
+					goto err_free;
+				}
+			}
 			curface++;
 		}
 	} while(nextline(&s));
@@ -280,10 +316,15 @@ err_free:
 
 static Err readobj(const char *path, struct model *out) {
 	char *buf;
-	Err err;
+	Err err = ERR_OK;
+
 	if ((err = readtostring(path, &buf)))
 		return err;
-	parseobj(buf, out);
+
+	if ((err = parseobj(buf, out)))
+		goto err_free;
+
+err_free:
 	free(buf);
-	return ERR_OK;
+	return err;
 }
