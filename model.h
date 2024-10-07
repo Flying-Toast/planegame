@@ -2,6 +2,7 @@
 #define __HAVE_MODEL_H
 
 #include "error.h"
+#include <GLES3/gl32.h>
 #include <stddef.h>
 
 enum modelkey {
@@ -38,6 +39,8 @@ struct model {
 
 	struct face *faces;
 	size_t nfaces;
+
+	GLuint shader;
 };
 
 Err getmodel(enum modelkey key, const struct model **out);

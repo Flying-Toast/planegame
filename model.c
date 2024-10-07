@@ -1,33 +1,95 @@
 #include "model.h"
+#include "util.h"
 #include <assert.h>
 #include <err.h>
-#include <fcntl.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr[0])))
 
 static Err readobj(const char *path, struct model *out);
 
+bool shaders_initialized = false;
+static GLuint default_shader;
 static struct model monkey;
 
-static Err cachemodel(const char *path, struct model *storage, const struct model **out) {
+static Err loadshader(const char *path, GLenum type, GLuint *id_out) {
+	char *src;
+	Err err;
+
+	if ((err = readtostring(path, &src)))
+		return err;
+
+	GLuint id = glCreateShader(type);
+	glShaderSource(id, 1, (const char **) &src, NULL);
+	glCompileShader(id);
+
+	GLint ok = GL_FALSE;
+	glGetShaderiv(id, GL_COMPILE_STATUS, &ok);
+	if (!ok) {
+		char infolog[1024] = {0};
+		glGetShaderInfoLog(id, sizeof(infolog), NULL, infolog);
+		fprintf(stderr, "shader compilation error: %s\n", infolog);
+		return ERR_GL;
+	}
+
+	*id_out = id;
+	free(src);
+	return ERR_OK;
+}
+
+static Err init_shaders(void) {
+	Err err;
+	GLuint vertshad, fragshad;
+
+	err = loadshader("data/shaders/vert.glsl", GL_VERTEX_SHADER, &vertshad);
+	if (err)
+		return err;
+
+	err = loadshader("data/shaders/frag.glsl", GL_FRAGMENT_SHADER, &fragshad);
+	if (err)
+		return err;
+
+	default_shader = glCreateProgram();
+	glAttachShader(default_shader, vertshad);
+	glAttachShader(default_shader, fragshad);
+	glLinkProgram(default_shader);
+
+	glDeleteShader(vertshad);
+	glDeleteShader(fragshad);
+
+	return ERR_OK;
+}
+
+static Err cachemodel(
+	struct model *storage,
+	const char *objpath,
+	const struct model **out
+) {
 	if (storage->faces == NULL) {
-		Err err = readobj(path, storage);
+		Err err = readobj(objpath, storage);
 		if (err)
 			return err;
 	}
+
+	if (!shaders_initialized) {
+		Err err = init_shaders();
+		if (err)
+			return err;
+		shaders_initialized = true;
+	}
+
+	storage->shader = default_shader;
 	*out = storage;
 	return ERR_OK;
 }
 
 Err getmodel(enum modelkey key, const struct model **out) {
 	switch (key) {
-		case MODEL_MONKEY:
-			return cachemodel("data/monkey.obj", &monkey, out);
+	case MODEL_MONKEY:
+		return cachemodel(&monkey, "data/monkey.obj", out);
 	}
 	errx(1, "invalid modelkey %d\n", key);
 }
@@ -217,24 +279,11 @@ err_free:
 }
 
 static Err readobj(const char *path, struct model *out) {
-	int fd;
-	Err err = ERR_OK;
-	struct stat st;
-
-	if ((fd = open(path, O_RDONLY)) == -1)
-		return ERR_READOBJ;
-
-	if (fstat(fd, &st) == -1 || !S_ISREG(st.st_mode))
-		goto out_close;
-
-	char *buf = malloc(st.st_size);
-	if (read(fd, buf, st.st_size) == -1)
-		goto out_free;
-
-	err = parseobj(buf, out);
-out_free:
+	char *buf;
+	Err err;
+	if ((err = readtostring(path, &buf)))
+		return err;
+	parseobj(buf, out);
 	free(buf);
-out_close:
-	close(fd);
-	return err;
+	return ERR_OK;
 }

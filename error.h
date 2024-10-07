@@ -3,8 +3,11 @@
 
 typedef enum {
 	ERR_OK = 0,
-	ERR_READOBJ,
+	ERR_FS,
 	ERR_PARSEOBJ,
+	ERR_GL,
+
+	MAX_ERR,
 } Err;
 
 #endif
