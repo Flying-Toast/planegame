@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <err.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,7 +30,7 @@ static Err loadshader(const char *path, GLenum type, GLuint *id_out) {
 	if (!ok) {
 		char infolog[1024] = {0};
 		glGetShaderInfoLog(id, sizeof(infolog), NULL, infolog);
-		fprintf(stderr, "shader compilation error: %s\n", infolog);
+		LOGF("shader compilation error: %s", infolog);
 		return ERR_GL;
 	}
 
@@ -184,7 +183,7 @@ static Err parseindex(const char **string, size_t *out) {
 		return ERR_PARSEOBJ;
 
 	if (parsed == 0) {
-		fprintf(stderr, "index is 0 but .obj indices should start at 1\n");
+		LOG("index is 0 but .obj indices should start at 1");
 		return ERR_PARSEOBJ;
 	}
 
@@ -238,6 +237,7 @@ static Err parseobj(const char *s, struct model *out) {
 	struct vec2 *uvs = malloc(sizeof(struct vec2) * nuvs);
 
 	size_t curpoint = 0, curface = 0, curuv = 0, curnorm = 0;
+	size_t lineno = 0;
 
 	do {
 		if (strneq(s, "v ", 2)) {
@@ -266,27 +266,24 @@ static Err parseobj(const char *s, struct model *out) {
 			for (size_t i = 0; i < 3; i++) {
 				struct vert *v = &faces[curface].verts[i];
 				if (v->norm_idx >= nnorms) {
-					fprintf(
-						stderr,
-						"norm idx %lu out of range (max %lu)\n"
+					LOGF(
+						"norm idx %lu out of range (max %lu)"
 						, v->norm_idx
 						, nnorms - 1
 					);
 					goto err_free;
 				}
 				if (v->point_idx >= npoints) {
-					fprintf(
-						stderr,
-						"point idx %lu out of range (max %lu)\n"
+					LOGF(
+						"point idx %lu out of range (max %lu)"
 						, v->point_idx
 						, npoints - 1
 					);
 					goto err_free;
 				}
 				if (v->uv_idx >= nuvs) {
-					fprintf(
-						stderr,
-						"uv idx %lu out of range (max %lu)\n"
+					LOGF(
+						"uv idx %lu out of range (max %lu)"
 						, v->uv_idx
 						, nuvs - 1
 					);
@@ -295,7 +292,7 @@ static Err parseobj(const char *s, struct model *out) {
 			}
 			curface++;
 		}
-	} while(nextline(&s));
+	} while(lineno++, nextline(&s));
 
 	out->points = points;
 	out->npoints = npoints;
@@ -307,6 +304,7 @@ static Err parseobj(const char *s, struct model *out) {
 	out->nuvs = nuvs;
 	return ERR_OK;
 err_free:
+	LOGF("error in obj file line %lu", lineno);
 	free(points);
 	free(norms);
 	free(faces);
@@ -318,11 +316,15 @@ static Err readobj(const char *path, struct model *out) {
 	char *buf;
 	Err err = ERR_OK;
 
-	if ((err = readtostring(path, &buf)))
+	if ((err = readtostring(path, &buf))) {
+		LOGF("failed to read %s", path);
 		return err;
+	}
 
-	if ((err = parseobj(buf, out)))
+	if ((err = parseobj(buf, out))) {
+		LOGF("failed to parse obj from %s", path);
 		goto err_free;
+	}
 
 err_free:
 	free(buf);
