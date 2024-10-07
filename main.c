@@ -24,14 +24,18 @@ int main(void) {
 	SDL_Window *window = SDL_CreateWindow(
 		"planegame",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-		1920, 1080,
-		SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_SHOWN
+		100, 100, // width/height ignored; FULLSCREEN_DESKTOP uses current display res
+		SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SHOWN
 	);
 	if (!window)
 		errx(1, "SDL_CreateWindow: %s", SDL_GetError());
 
 	if (!SDL_GL_CreateContext(window))
 		errx(1, "SDL_GL_CreateContext: %s", SDL_GetError());
+
+	int w, h;
+	SDL_GetWindowSize(window, &w, &h);
+	glViewport(0, 0, w, h);
 
 	/////////////////// DELETEME DELETEMELKEAFKEAjvlk
 	const struct model *foobar123;
