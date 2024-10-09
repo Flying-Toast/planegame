@@ -324,10 +324,10 @@ static Err parseobj(const char *s, struct model *out) {
 	Err err = ERR_OK;
 	size_t npoints, nfaces, nsts, nnorms;
 	countlines(s, &npoints, &nfaces, &nsts, &nnorms);
-	struct vec3 *points = malloc(sizeof(struct vec3) * npoints);
-	struct vec3 *norms = malloc(sizeof(struct vec3) * nnorms);
+	vec3 *points = malloc(sizeof(vec3) * npoints);
+	vec3 *norms = malloc(sizeof(vec3) * nnorms);
 	struct objface *faces = malloc(sizeof(struct objface) * nfaces);
-	struct vec2 *sts = malloc(sizeof(struct vec2) * nsts);
+	vec2 *sts = malloc(sizeof(vec2) * nsts);
 
 	size_t curpoint = 0, curface = 0, curst = 0, curnorm = 0;
 	size_t lineno = 0;
@@ -336,19 +336,19 @@ static Err parseobj(const char *s, struct model *out) {
 		if (strneq(s, "v ", 2)) {
 			s += 2; // skip "v "
 			assert(curpoint < npoints);
-			if (parsefloats(&s, 3, points[curpoint].coords))
+			if (parsefloats(&s, 3, points[curpoint].v))
 				goto err_free;
 			curpoint++;
 		} else if (strneq(s, "vt ", 3)) {
 			s += 3; // skip "vt "
 			assert(curst < nsts);
-			if (parsefloats(&s, 2, sts[curst].coords))
+			if (parsefloats(&s, 2, sts[curst].v))
 				goto err_free;
 			curst++;
 		} else if (strneq(s, "vn ", 3)) {
 			s += 3; // skip "vn "
 			assert(curnorm < nnorms);
-			if (parsefloats(&s, 3, norms[curnorm].coords))
+			if (parsefloats(&s, 3, norms[curnorm].v))
 				goto err_free;
 			curnorm++;
 		} else if (strneq(s, "f ", 2)) {
@@ -471,7 +471,7 @@ static Err model_initgl(struct model *m) {
 
 	glVertexAttribPointer(
 		pos_att,
-		ARRAY_LEN(m->verts[0].pos.coords),
+		ARRAY_LEN(m->verts[0].pos.v),
 		GL_FLOAT,
 		GL_FALSE,
 		sizeof(struct vert),
@@ -480,7 +480,7 @@ static Err model_initgl(struct model *m) {
 	glEnableVertexAttribArray(pos_att);
 	glVertexAttribPointer(
 		st_att,
-		ARRAY_LEN(m->verts[0].st.coords),
+		ARRAY_LEN(m->verts[0].st.v),
 		GL_FLOAT,
 		GL_FALSE,
 		sizeof(struct vert),
@@ -489,7 +489,7 @@ static Err model_initgl(struct model *m) {
 	glEnableVertexAttribArray(st_att);
 	glVertexAttribPointer(
 		norm_att,
-		ARRAY_LEN(m->verts[0].norm.coords),
+		ARRAY_LEN(m->verts[0].norm.v),
 		GL_FLOAT,
 		GL_FALSE,
 		sizeof(struct vert),
