@@ -29,7 +29,7 @@ struct model {
 
 	GLuint vbo;
 	GLuint vao;
-
+	GLuint tex;
 	GLuint shader;
 };
 

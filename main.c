@@ -1,6 +1,7 @@
 #include "model.h"
 #include <GLES3/gl32.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 #include <err.h>
 #include <stdbool.h>
 
@@ -18,6 +19,9 @@ int main(void) {
 
 	if (SDL_Init(SDL_INIT_VIDEO))
 		errx(1, "SDL_Init: %s", SDL_GetError());
+
+	if (!IMG_Init(IMG_INIT_JPG))
+		errx(1, "IMG_Init: %s", IMG_GetError());
 
 	SDL_Window *window = SDL_CreateWindow(
 		"planegame",

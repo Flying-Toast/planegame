@@ -1,5 +1,6 @@
 #include "model.h"
 #include "util.h"
+#include <SDL2/SDL_image.h>
 #include <assert.h>
 #include <err.h>
 #include <stdbool.h>
@@ -57,9 +58,11 @@ static void freemodel(struct model *m) {
 	if (m->verts == NULL)
 		return;
 	free(m->verts);
-	m->verts = NULL;
 	glDeleteBuffers(1, &m->vbo);
 	glDeleteVertexArrays(1, &m->vao);
+	glDeleteTextures(1, &m->tex);
+
+	memset(m, 0, sizeof(*m));
 }
 
 void model_cleanup(void) {
@@ -107,9 +110,37 @@ out:
 	return err;
 }
 
+static Err loadtex(const char *path, GLuint *out) {
+	GLuint id;
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_2D, id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+	SDL_Surface *surf = IMG_Load(path);
+	if (!surf) {
+		LOGF("can't load file %s for texture", path);
+		return ERR_FS;
+	}
+	glTexImage2D(
+		GL_TEXTURE_2D,
+		0,
+		GL_RGB,
+		surf->w,
+		surf->h,
+		0,
+		GL_RGB,
+		GL_UNSIGNED_BYTE,
+		surf->pixels
+	);
+	SDL_FreeSurface(surf);
+
+	*out = id;
+	return ERR_OK;
+}
+
 static Err cachemodel(
 	struct model *storage,
-	const char *objpath,
+	const char *modelname,
 	const struct model **out
 ) {
 	if (!shaders_initialized) {
@@ -121,10 +152,25 @@ static Err cachemodel(
 
 	if (storage->verts == NULL) {
 		Err err;
-		if ((err = readobj(objpath, storage)))
+		char pathbuf[1024];
+		int bufsiz = sizeof(pathbuf);
+
+		if (snprintf(pathbuf, bufsiz, "data/models/%s.obj", modelname) >= bufsiz) {
+			LOGF("obj path truncated to %s", pathbuf);
+			return ERR_FS;
+		}
+		if ((err = readobj(pathbuf, storage)))
 			return err;
 
+		if (snprintf(pathbuf, bufsiz, "data/models/%s.jpg", modelname) >= bufsiz) {
+			LOGF("tex path truncated to %s", pathbuf);
+			return ERR_FS;
+		}
+
 		if ((err = model_initgl(storage)))
+			return err;
+
+		if ((err = loadtex(pathbuf, &storage->tex)))
 			return err;
 	}
 
@@ -135,7 +181,7 @@ static Err cachemodel(
 Err getmodel(enum modelkey key, const struct model **out) {
 	switch (key) {
 	case MODEL_MONKEY:
-		return cachemodel(&monkey, "data/models/monkey.obj", out);
+		return cachemodel(&monkey, "monkey", out);
 	}
 	errx(1, "invalid modelkey %d\n", key);
 }
@@ -431,6 +477,7 @@ static Err model_initgl(struct model *m) {
 		sizeof(struct vert),
 		(void *) offsetof(struct vert, pos)
 	);
+	glEnableVertexAttribArray(pos_att);
 	glVertexAttribPointer(
 		st_att,
 		ARRAY_LEN(m->verts[0].st.coords),
@@ -439,6 +486,7 @@ static Err model_initgl(struct model *m) {
 		sizeof(struct vert),
 		(void *) offsetof(struct vert, st)
 	);
+	glEnableVertexAttribArray(st_att);
 	glVertexAttribPointer(
 		norm_att,
 		ARRAY_LEN(m->verts[0].norm.coords),
@@ -447,9 +495,6 @@ static Err model_initgl(struct model *m) {
 		sizeof(struct vert),
 		(void *) offsetof(struct vert, norm)
 	);
-
-	glEnableVertexAttribArray(pos_att);
-	glEnableVertexAttribArray(st_att);
 	glEnableVertexAttribArray(norm_att);
 
 	m->vbo = vbo;
@@ -465,5 +510,13 @@ out:
 void model_bind(const struct model *m) {
 	glBindVertexArray(m->vao);
 	glBindBuffer(GL_ARRAY_BUFFER, m->vbo);
+
 	glUseProgram(m->shader);
+
+	glActiveTexture(GL_TEXTURE0);
+	glUniform1i(
+		glGetUniformLocation(m->shader, "tex"),
+		0
+	);
+	glBindTexture(GL_TEXTURE_2D, m->tex);
 }

@@ -6,7 +6,8 @@ out vec4 color;
 in vec3 fragnorm;
 in vec2 fragst;
 
+uniform sampler2D tex;
+
 void main() {
-	color = vec4(1.0, 0.4, 0.2, 1.0);
-	color = vec4(fragst,fragnorm.x, 1.);
+	color = texture(tex, fragst + 0.00000000000001*fragnorm.x);
 }
