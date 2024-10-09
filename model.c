@@ -9,6 +9,7 @@
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr[0])))
 
 static Err readobj(const char *path, struct model *out);
+static Err model_initgl(struct model *m);
 
 struct objvert {
 	size_t point_idx;
@@ -57,6 +58,8 @@ static void freemodel(struct model *m) {
 		return;
 	free(m->verts);
 	m->verts = NULL;
+	glDeleteBuffers(1, &m->vbo);
+	glDeleteVertexArrays(1, &m->vao);
 }
 
 void model_cleanup(void) {
@@ -68,6 +71,7 @@ void model_cleanup(void) {
 }
 
 static Err init_shaders(void) {
+	shaders_initialized = true;
 	Err err = ERR_OK;
 	GLuint vertshad, fragshad;
 
@@ -108,20 +112,22 @@ static Err cachemodel(
 	const char *objpath,
 	const struct model **out
 ) {
-	if (storage->verts == NULL) {
-		Err err = readobj(objpath, storage);
-		if (err)
-			return err;
-	}
-
 	if (!shaders_initialized) {
 		Err err = init_shaders();
 		if (err)
 			return err;
-		shaders_initialized = true;
+		storage->shader = default_shader;
 	}
 
-	storage->shader = default_shader;
+	if (storage->verts == NULL) {
+		Err err;
+		if ((err = readobj(objpath, storage)))
+			return err;
+
+		if ((err = model_initgl(storage)))
+			return err;
+	}
+
 	*out = storage;
 	return ERR_OK;
 }
@@ -377,4 +383,87 @@ static Err readobj(const char *path, struct model *out) {
 err_free:
 	free(buf);
 	return err;
+}
+
+static Err getatt(GLuint shader, const char *name, GLint *out) {
+	GLint loc = glGetAttribLocation(shader, name);
+	if (loc == -1) {
+		LOGF("can't get attrib %s", name);
+		return ERR_GL;
+	}
+	*out = loc;
+	return ERR_OK;
+}
+
+static Err model_initgl(struct model *m) {
+	Err err = ERR_OK;
+	GLuint vbo, vao;
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(
+		GL_ARRAY_BUFFER,
+		m->nverts * sizeof(m->verts[0]),
+		m->verts,
+		GL_STATIC_DRAW
+	);
+
+	GLint pos_att, uv_att, norm_att;
+	if ((err = getatt(m->shader, "pos", &pos_att))) {
+		err = ERR_GL;
+		goto err_delete;
+	}
+	if ((err = getatt(m->shader, "uv", &uv_att))) {
+		err = ERR_GL;
+		goto err_delete;
+	}
+	if ((err = getatt(m->shader, "norm", &norm_att))) {
+		err = ERR_GL;
+		goto err_delete;
+	}
+
+	glVertexAttribPointer(
+		pos_att,
+		ARRAY_LEN(m->verts[0].pos.coords),
+		GL_FLOAT,
+		GL_FALSE,
+		sizeof(struct vert),
+		(void *) offsetof(struct vert, pos)
+	);
+	glVertexAttribPointer(
+		uv_att,
+		ARRAY_LEN(m->verts[0].uv.coords),
+		GL_FLOAT,
+		GL_FALSE,
+		sizeof(struct vert),
+		(void *) offsetof(struct vert, uv)
+	);
+	glVertexAttribPointer(
+		norm_att,
+		ARRAY_LEN(m->verts[0].norm.coords),
+		GL_FLOAT,
+		GL_FALSE,
+		sizeof(struct vert),
+		(void *) offsetof(struct vert, norm)
+	);
+
+	glEnableVertexAttribArray(pos_att);
+	glEnableVertexAttribArray(uv_att);
+	glEnableVertexAttribArray(norm_att);
+
+	m->vbo = vbo;
+	m->vao = vao;
+	goto out;
+err_delete:
+	glDeleteBuffers(1, &vbo);
+	glDeleteVertexArrays(1, &vao);
+out:
+	return err;
+}
+
+void model_bind(const struct model *m) {
+	glBindVertexArray(m->vao);
+	glBindBuffer(GL_ARRAY_BUFFER, m->vbo);
+	glUseProgram(m->shader);
 }

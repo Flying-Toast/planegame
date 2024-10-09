@@ -27,10 +27,14 @@ struct model {
 	struct vert *verts;
 	size_t nverts;
 
+	GLuint vbo;
+	GLuint vao;
+
 	GLuint shader;
 };
 
 Err getmodel(enum modelkey key, const struct model **out);
 void model_cleanup(void);
+void model_bind(const struct model *m);
 
 #endif

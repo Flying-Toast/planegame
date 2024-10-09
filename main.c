@@ -35,22 +35,10 @@ int main(void) {
 	SDL_GetWindowSize(window, &w, &h);
 	glViewport(0, 0, w, h);
 
-	/////////////////// DELETEME DELETEMELKEAFKEAjvlk
-	const struct model *foobar123;
-	err = getmodel(MODEL_MONKEY, &foobar123);
+	const struct model *monkey;
+	err = getmodel(MODEL_MONKEY, &monkey);
 	if (err)
-		errx(1, "whoopsie doopsie: %d", err);
-	GLuint prog = foobar123->shader;
-	glUseProgram(prog);
-	GLfloat triangle_vertices[] = {
-	    0.0,  0.8, 0.0,
-	   -0.8, -0.8, 0.0,
-	    0.8, -0.8, 0.0,
-	};
-	GLint attb = glGetAttribLocation(prog, "pos");
-	if (attb == -1)
-		errx(1, "fjewakfjewaoif");
-	///////////////////
+		errx(1, "getmodel: %d", err);
 
 	glClearColor(0.157, 0.173, 0.204, 1.0);
 	for (;;) {
@@ -62,18 +50,10 @@ int main(void) {
 		}
 
 		glClear(GL_COLOR_BUFFER_BIT);
-		/////////////////// DELETEME DELETEMELKEAFKEAjvlk
-		glEnableVertexAttribArray(attb);
-		glVertexAttribPointer(
-			attb,
-			3,
-			GL_FLOAT,
-			GL_FALSE,
-			0,
-			triangle_vertices
-		);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-		/////////////////// DELETEME DELETEMELKEAFKEAjvlk
+
+		model_bind(monkey);
+		glDrawArrays(GL_TRIANGLES, 0, monkey->nverts);
+
 		SDL_GL_SwapWindow(window);
 	}
 
