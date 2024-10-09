@@ -19,7 +19,7 @@ struct vec3 {
 
 struct vert {
 	struct vec3 pos;
-	struct vec2 uv;
+	struct vec2 st;
 	struct vec3 norm;
 };
 

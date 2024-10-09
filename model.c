@@ -13,7 +13,7 @@ static Err model_initgl(struct model *m);
 
 struct objvert {
 	size_t point_idx;
-	size_t uv_idx;
+	size_t st_idx;
 	size_t norm_idx;
 };
 
@@ -135,7 +135,7 @@ static Err cachemodel(
 Err getmodel(enum modelkey key, const struct model **out) {
 	switch (key) {
 	case MODEL_MONKEY:
-		return cachemodel(&monkey, "data/monkey.obj", out);
+		return cachemodel(&monkey, "data/models/monkey.obj", out);
 	}
 	errx(1, "invalid modelkey %d\n", key);
 }
@@ -167,23 +167,23 @@ static void countlines(
 	const char *string,
 	size_t *npoints_out,
 	size_t *nfaces_out,
-	size_t *nuvs_out,
+	size_t *nsts_out,
 	size_t *nnorms_out
 ) {
-	size_t npoints = 0, nfaces = 0, nuvs = 0, nnorms = 0;
+	size_t npoints = 0, nfaces = 0, nsts = 0, nnorms = 0;
 	do {
 		if (strneq(string, "v ", 2))
 			npoints++;
 		else if (strneq(string, "f ", 2))
 			nfaces++;
 		else if (strneq(string, "vt ", 3))
-			nuvs++;
+			nsts++;
 		else if (strneq(string, "vn ", 3))
 			nnorms++;
 	} while (nextline(&string));
 	*npoints_out = npoints;
 	*nfaces_out = nfaces;
-	*nuvs_out = nuvs;
+	*nsts_out = nsts;
 	*nnorms_out = nnorms;
 }
 
@@ -254,7 +254,7 @@ static Err parseobjvert(const char **string, struct objvert *out) {
 	}
 
 	out->point_idx = parts[0];
-	out->uv_idx = parts[1];
+	out->st_idx = parts[1];
 	out->norm_idx = parts[2];
 	*string = s;
 	return ERR_OK;
@@ -276,14 +276,14 @@ static Err parseobjverts(const char **string, size_t n, struct objvert *outlist)
 
 static Err parseobj(const char *s, struct model *out) {
 	Err err = ERR_OK;
-	size_t npoints, nfaces, nuvs, nnorms;
-	countlines(s, &npoints, &nfaces, &nuvs, &nnorms);
+	size_t npoints, nfaces, nsts, nnorms;
+	countlines(s, &npoints, &nfaces, &nsts, &nnorms);
 	struct vec3 *points = malloc(sizeof(struct vec3) * npoints);
 	struct vec3 *norms = malloc(sizeof(struct vec3) * nnorms);
 	struct objface *faces = malloc(sizeof(struct objface) * nfaces);
-	struct vec2 *uvs = malloc(sizeof(struct vec2) * nuvs);
+	struct vec2 *sts = malloc(sizeof(struct vec2) * nsts);
 
-	size_t curpoint = 0, curface = 0, curuv = 0, curnorm = 0;
+	size_t curpoint = 0, curface = 0, curst = 0, curnorm = 0;
 	size_t lineno = 0;
 
 	do {
@@ -295,10 +295,10 @@ static Err parseobj(const char *s, struct model *out) {
 			curpoint++;
 		} else if (strneq(s, "vt ", 3)) {
 			s += 3; // skip "vt "
-			assert(curuv < nuvs);
-			if (parsefloats(&s, 2, uvs[curuv].coords))
+			assert(curst < nsts);
+			if (parsefloats(&s, 2, sts[curst].coords))
 				goto err_free;
-			curuv++;
+			curst++;
 		} else if (strneq(s, "vn ", 3)) {
 			s += 3; // skip "vn "
 			assert(curnorm < nnorms);
@@ -328,11 +328,11 @@ static Err parseobj(const char *s, struct model *out) {
 					);
 					goto err_free;
 				}
-				if (v->uv_idx >= nuvs) {
+				if (v->st_idx >= nsts) {
 					LOGF(
-						"uv idx %lu out of range (max %lu)"
-						, v->uv_idx
-						, nuvs - 1
+						"st idx %lu out of range (max %lu)"
+						, v->st_idx
+						, nsts - 1
 					);
 					goto err_free;
 				}
@@ -349,7 +349,7 @@ static Err parseobj(const char *s, struct model *out) {
 			struct vert *v = &verts[fi * 3 + vi];
 			v->norm = norms[overt->norm_idx];
 			v->pos = points[overt->point_idx];
-			v->uv = uvs[overt->uv_idx];
+			v->st = sts[overt->st_idx];
 		}
 	}
 	out->verts = verts;
@@ -362,7 +362,7 @@ out:
 	free(points);
 	free(norms);
 	free(faces);
-	free(uvs);
+	free(sts);
 	return err;
 }
 
@@ -409,12 +409,12 @@ static Err model_initgl(struct model *m) {
 		GL_STATIC_DRAW
 	);
 
-	GLint pos_att, uv_att, norm_att;
+	GLint pos_att, st_att, norm_att;
 	if ((err = getatt(m->shader, "pos", &pos_att))) {
 		err = ERR_GL;
 		goto err_delete;
 	}
-	if ((err = getatt(m->shader, "uv", &uv_att))) {
+	if ((err = getatt(m->shader, "st", &st_att))) {
 		err = ERR_GL;
 		goto err_delete;
 	}
@@ -432,12 +432,12 @@ static Err model_initgl(struct model *m) {
 		(void *) offsetof(struct vert, pos)
 	);
 	glVertexAttribPointer(
-		uv_att,
-		ARRAY_LEN(m->verts[0].uv.coords),
+		st_att,
+		ARRAY_LEN(m->verts[0].st.coords),
 		GL_FLOAT,
 		GL_FALSE,
 		sizeof(struct vert),
-		(void *) offsetof(struct vert, uv)
+		(void *) offsetof(struct vert, st)
 	);
 	glVertexAttribPointer(
 		norm_att,
@@ -449,7 +449,7 @@ static Err model_initgl(struct model *m) {
 	);
 
 	glEnableVertexAttribArray(pos_att);
-	glEnableVertexAttribArray(uv_att);
+	glEnableVertexAttribArray(st_att);
 	glEnableVertexAttribArray(norm_att);
 
 	m->vbo = vbo;
