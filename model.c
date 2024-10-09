@@ -10,6 +10,16 @@
 
 static Err readobj(const char *path, struct model *out);
 
+struct objvert {
+	size_t point_idx;
+	size_t uv_idx;
+	size_t norm_idx;
+};
+
+struct objface {
+	struct objvert verts[3];
+};
+
 bool shaders_initialized = false;
 static GLuint default_shader;
 // NOTE: add new models to model_cleanup()
@@ -43,15 +53,10 @@ err_free:
 }
 
 static void freemodel(struct model *m) {
-	if (m->faces == NULL)
+	if (m->verts == NULL)
 		return;
-	assert(m->norms != NULL);
-	assert(m->points != NULL);
-	assert(m->uvs != NULL);
-	free(m->norms);
-	free(m->points);
-	free(m->uvs);
-	memset(m, 0, sizeof(*m));
+	free(m->verts);
+	m->verts = NULL;
 }
 
 void model_cleanup(void) {
@@ -103,7 +108,7 @@ static Err cachemodel(
 	const char *objpath,
 	const struct model **out
 ) {
-	if (storage->faces == NULL) {
+	if (storage->verts == NULL) {
 		Err err = readobj(objpath, storage);
 		if (err)
 			return err;
@@ -228,7 +233,7 @@ static Err parseindex(const char **string, size_t *out) {
 	return ERR_OK;
 }
 
-static Err parsevert(const char **string, struct vert *out) {
+static Err parseobjvert(const char **string, struct objvert *out) {
 	const char *s = *string;
 
 	if (*s == '\0')
@@ -249,11 +254,11 @@ static Err parsevert(const char **string, struct vert *out) {
 	return ERR_OK;
 }
 
-static Err parseverts(const char **string, size_t n, struct vert *outlist) {
+static Err parseobjverts(const char **string, size_t n, struct objvert *outlist) {
 	const char *s = *string;
 
 	for (size_t i = 0; i < n; i++) {
-		if (parsevert(&s, &outlist[i]))
+		if (parseobjvert(&s, &outlist[i]))
 			return ERR_PARSEOBJ;
 		if (i != n - 1 && (!*s || *(s++) != ' '))
 			return ERR_PARSEOBJ;
@@ -264,11 +269,12 @@ static Err parseverts(const char **string, size_t n, struct vert *outlist) {
 }
 
 static Err parseobj(const char *s, struct model *out) {
+	Err err = ERR_OK;
 	size_t npoints, nfaces, nuvs, nnorms;
 	countlines(s, &npoints, &nfaces, &nuvs, &nnorms);
 	struct vec3 *points = malloc(sizeof(struct vec3) * npoints);
 	struct vec3 *norms = malloc(sizeof(struct vec3) * nnorms);
-	struct face *faces = malloc(sizeof(struct face) * nfaces);
+	struct objface *faces = malloc(sizeof(struct objface) * nfaces);
 	struct vec2 *uvs = malloc(sizeof(struct vec2) * nuvs);
 
 	size_t curpoint = 0, curface = 0, curuv = 0, curnorm = 0;
@@ -296,10 +302,10 @@ static Err parseobj(const char *s, struct model *out) {
 		} else if (strneq(s, "f ", 2)) {
 			s += 2; // skip "f "
 			assert(curface < nfaces);
-			if (parseverts(&s, 3, faces[curface].verts))
+			if (parseobjverts(&s, 3, faces[curface].verts))
 				goto err_free;
 			for (size_t i = 0; i < 3; i++) {
-				struct vert *v = &faces[curface].verts[i];
+				struct objvert *v = &faces[curface].verts[i];
 				if (v->norm_idx >= nnorms) {
 					LOGF(
 						"norm idx %lu out of range (max %lu)"
@@ -329,22 +335,29 @@ static Err parseobj(const char *s, struct model *out) {
 		}
 	} while(lineno++, nextline(&s));
 
-	out->points = points;
-	out->npoints = npoints;
-	out->norms = norms;
-	out->nnorms = nnorms;
-	out->faces = faces;
-	out->nfaces = nfaces;
-	out->uvs = uvs;
-	out->nuvs = nuvs;
-	return ERR_OK;
+	size_t nverts = nfaces * 3;
+	struct vert *verts = malloc(sizeof(struct vert) * nverts);
+	for (size_t fi = 0; fi < nfaces; fi++) {
+		for (size_t vi = 0; vi < 3; vi++) {
+			const struct objvert *overt = &faces[fi].verts[vi];
+			struct vert *v = &verts[fi * 3 + vi];
+			v->norm = norms[overt->norm_idx];
+			v->pos = points[overt->point_idx];
+			v->uv = uvs[overt->uv_idx];
+		}
+	}
+	out->verts = verts;
+	out->nverts = nverts;
+	goto out;
 err_free:
+	err = ERR_PARSEOBJ;
 	LOGF("error in obj file line %lu", lineno);
+out:
 	free(points);
 	free(norms);
 	free(faces);
 	free(uvs);
-	return ERR_PARSEOBJ;
+	return err;
 }
 
 static Err readobj(const char *path, struct model *out) {

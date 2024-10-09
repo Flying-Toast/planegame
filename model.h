@@ -18,27 +18,14 @@ struct vec3 {
 };
 
 struct vert {
-	size_t point_idx;
-	size_t uv_idx;
-	size_t norm_idx;
-};
-
-struct face {
-	struct vert verts[3];
+	struct vec3 pos;
+	struct vec2 uv;
+	struct vec3 norm;
 };
 
 struct model {
-	struct vec3 *points;
-	size_t npoints;
-
-	struct vec3 *norms;
-	size_t nnorms;
-
-	struct vec2 *uvs;
-	size_t nuvs;
-
-	struct face *faces;
-	size_t nfaces;
+	struct vert *verts;
+	size_t nverts;
 
 	GLuint shader;
 };
