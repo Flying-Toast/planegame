@@ -44,5 +44,6 @@ struct model {
 };
 
 Err getmodel(enum modelkey key, const struct model **out);
+void model_cleanup(void);
 
 #endif

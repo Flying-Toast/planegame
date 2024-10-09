@@ -19,8 +19,6 @@ int main(void) {
 	if (SDL_Init(SDL_INIT_VIDEO))
 		errx(1, "SDL_Init: %s", SDL_GetError());
 
-	atexit(SDL_Quit);
-
 	SDL_Window *window = SDL_CreateWindow(
 		"planegame",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -78,6 +76,11 @@ int main(void) {
 		/////////////////// DELETEME DELETEMELKEAFKEAjvlk
 		SDL_GL_SwapWindow(window);
 	}
+
 quit:
+	SDL_DestroyWindow(window);
+	model_cleanup();
+
+	SDL_Quit();
 	return 0;
 }

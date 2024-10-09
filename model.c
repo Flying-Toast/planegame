@@ -12,11 +12,12 @@ static Err readobj(const char *path, struct model *out);
 
 bool shaders_initialized = false;
 static GLuint default_shader;
+// NOTE: add new models to model_cleanup()
 static struct model monkey;
 
 static Err loadshader(const char *path, GLenum type, GLuint *id_out) {
 	char *src;
-	Err err;
+	Err err = ERR_OK;
 
 	if ((err = readtostring(path, &src)))
 		return err;
@@ -31,16 +32,38 @@ static Err loadshader(const char *path, GLenum type, GLuint *id_out) {
 		char infolog[1024] = {0};
 		glGetShaderInfoLog(id, sizeof(infolog), NULL, infolog);
 		LOGF("shader compilation error: %s", infolog);
-		return ERR_GL;
+		err = ERR_GL;
+		goto err_free;
 	}
 
 	*id_out = id;
+err_free:
 	free(src);
-	return ERR_OK;
+	return err;
+}
+
+static void freemodel(struct model *m) {
+	if (m->faces == NULL)
+		return;
+	assert(m->norms != NULL);
+	assert(m->points != NULL);
+	assert(m->uvs != NULL);
+	free(m->norms);
+	free(m->points);
+	free(m->uvs);
+	memset(m, 0, sizeof(*m));
+}
+
+void model_cleanup(void) {
+	freemodel(&monkey);
+	if (shaders_initialized) {
+		glDeleteProgram(default_shader);
+		shaders_initialized = false;
+	}
 }
 
 static Err init_shaders(void) {
-	Err err;
+	Err err = ERR_OK;
 	GLuint vertshad, fragshad;
 
 	err = loadshader("data/shaders/vert.glsl", GL_VERTEX_SHADER, &vertshad);
@@ -54,12 +77,25 @@ static Err init_shaders(void) {
 	default_shader = glCreateProgram();
 	glAttachShader(default_shader, vertshad);
 	glAttachShader(default_shader, fragshad);
-	glLinkProgram(default_shader);
 
+	glLinkProgram(default_shader);
+	GLint ok = GL_FALSE;
+	glGetProgramiv(default_shader, GL_LINK_STATUS, &ok);
+	if (!ok) {
+		char infolog[1024] = {0};
+		glGetProgramInfoLog(default_shader, sizeof(infolog), NULL, infolog);
+		LOGF("shader link error: %s", infolog);
+		err = ERR_GL;
+		goto err_delete;
+	}
+
+	goto out;
+err_delete:
+	glDeleteProgram(default_shader);
+out:
 	glDeleteShader(vertshad);
 	glDeleteShader(fragshad);
-
-	return ERR_OK;
+	return err;
 }
 
 static Err cachemodel(
@@ -230,7 +266,6 @@ static Err parseverts(const char **string, size_t n, struct vert *outlist) {
 static Err parseobj(const char *s, struct model *out) {
 	size_t npoints, nfaces, nuvs, nnorms;
 	countlines(s, &npoints, &nfaces, &nuvs, &nnorms);
-	// we leak these; the model gets cached in getmodel()
 	struct vec3 *points = malloc(sizeof(struct vec3) * npoints);
 	struct vec3 *norms = malloc(sizeof(struct vec3) * nnorms);
 	struct face *faces = malloc(sizeof(struct face) * nfaces);
