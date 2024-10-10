@@ -39,4 +39,13 @@ static inline mat4 mat4mul(const mat4 *lhs, const mat4 *rhs) {
 	return ret;
 }
 
+// scale top-left 3x3 submatrix by `s` in-place
+static inline void mat4muls3x3(mat4 *m, float s) {
+	for (size_t i = 0; i < 3; i++) {
+		for (size_t j = 0; j < 3; j++) {
+			m->v[i][j] *= s;
+		}
+	}
+}
+
 #endif

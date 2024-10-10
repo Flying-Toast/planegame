@@ -11,3 +11,15 @@ Err game_init(struct game *g) {
 
 	return err;
 }
+
+void game_tick(struct game *g, float dt) {
+	////////////////////////
+	g->cam.transform = ID4;
+	static float ffff = 1;
+	mat4muls3x3(&g->cam.transform, 1000.0/ffff);
+	ffff += dt;
+	////////////////////////
+}
+
+void game_handle_evt(const SDL_Event *e) {
+}

@@ -1,7 +1,6 @@
 #include "game.h"
 #include "model.h"
 #include <GLES3/gl32.h>
-#include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <err.h>
 #include <stdbool.h>
@@ -9,6 +8,7 @@
 void process_event(const SDL_Event *evt) {
 	if (evt->type == SDL_KEYDOWN && evt->key.keysym.sym == SDLK_ESCAPE)
 		exit(0);
+	game_handle_evt(evt);
 }
 
 int main(void) {
@@ -44,6 +44,8 @@ int main(void) {
 	if ((err = game_init(&game)))
 		errx(1, "game_init: %d", err);
 
+	Uint32 lasttick = SDL_GetTicks();
+
 	glClearColor(0.157, 0.173, 0.204, 1.0);
 	for (;;) {
 		SDL_Event evt;
@@ -52,6 +54,12 @@ int main(void) {
 				goto quit;
 			process_event(&evt);
 		}
+
+		Uint32 thistick = SDL_GetTicks();
+		Uint32 dt = thistick = lasttick;
+		lasttick = thistick;
+
+		game_tick(&game, dt);
 
 		glClear(GL_COLOR_BUFFER_BIT);
 		if ((err = render(&game)))
