@@ -3,7 +3,9 @@
 
 #include "model.h"
 #include "render.h"
-#include <SDL2/SDL.h>
+
+union SDL_Event;
+typedef union SDL_Event SDL_Event;
 
 struct game {
 	struct camera cam;

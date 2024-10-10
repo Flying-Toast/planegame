@@ -1,4 +1,5 @@
 #include "game.h"
+#include <SDL2/SDL.h>
 
 static void init_cam(struct camera *c) {
 	c->transform = ID4;

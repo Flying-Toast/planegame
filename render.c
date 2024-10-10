@@ -1,5 +1,6 @@
 #include "game.h"
 #include "render.h"
+#include <GLES3/gl32.h>
 
 static Err rendermodel(const struct game *g, const struct model *m) {
 	GLint transform_uni;

@@ -1,5 +1,6 @@
 #include "model.h"
 #include "util.h"
+#include <GLES3/gl32.h>
 #include <SDL2/SDL_image.h>
 #include <assert.h>
 #include <err.h>

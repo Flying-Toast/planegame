@@ -3,7 +3,6 @@
 
 #include "error.h"
 #include "linalg.h"
-#include <GLES3/gl32.h>
 #include <stddef.h>
 
 enum modelkey {
@@ -20,10 +19,10 @@ struct model {
 	struct vert *verts;
 	size_t nverts;
 
-	GLuint vbo;
-	GLuint vao;
-	GLuint tex;
-	GLuint shader;
+	unsigned vbo;
+	unsigned vao;
+	unsigned tex;
+	unsigned shader;
 };
 
 Err getmodel(enum modelkey key, const struct model **out);
