@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=-Wall -Wextra -Wpedantic -std=c99
+CFLAGS=-Wall -Wextra -Wpedantic -std=c99 -g -fsanitize=undefined
 LIBS=-lSDL2 -lSDL2_image -lGL -lm
 OBJECTS=main.o model.o util.o game.o render.o
 
