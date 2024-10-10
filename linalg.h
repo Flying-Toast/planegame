@@ -1,6 +1,15 @@
 #ifndef __HAVE_LINALG_H
 #define __HAVE_LINALG_H
 
+#include <stddef.h>
+
+#define ID4 ((mat4) {{ \
+		{1.0, 0.0, 0.0, 0.0}, \
+		{0.0, 1.0, 0.0, 0.0}, \
+		{0.0, 0.0, 1.0, 0.0}, \
+		{0.0, 0.0, 0.0, 1.0}, \
+	}})
+
 typedef struct {
 	float v[2];
 } vec2;
@@ -14,7 +23,7 @@ typedef struct {
 	float v[4][4];
 } mat4;
 
-static inline mat4 mat4_mul(const mat4 *lhs, const mat4 *rhs) {
+static inline mat4 mat4mul(const mat4 *lhs, const mat4 *rhs) {
 	mat4 ret;
 
 	for (size_t col = 0; col < 4; col++) {

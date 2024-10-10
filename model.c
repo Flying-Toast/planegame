@@ -179,11 +179,17 @@ static Err cachemodel(
 }
 
 Err getmodel(enum modelkey key, const struct model **out) {
+	Err err;
 	switch (key) {
 	case MODEL_MONKEY:
-		return cachemodel(&monkey, "monkey", out);
+		err = cachemodel(&monkey, "monkey", out);
+		break;
+	default:
+		errx(1, "invalid modelkey %d\n", key);
 	}
-	errx(1, "invalid modelkey %d\n", key);
+	if (err)
+		LOGF("getmodel(key=%d) err: %d", key, err);
+	return err;
 }
 
 static bool strneq(const char *a, const char *b, size_t n) {
@@ -314,6 +320,11 @@ static Err parseobjverts(const char **string, size_t n, struct objvert *outlist)
 			return ERR_PARSEOBJ;
 		if (i != n - 1 && (!*s || *(s++) != ' '))
 			return ERR_PARSEOBJ;
+	}
+
+	if (*s != '\0' && *s != '\n') {
+		LOGF("expected eol after %lu verts", n);
+		return ERR_PARSEOBJ;
 	}
 
 	*string = s;

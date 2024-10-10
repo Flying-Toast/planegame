@@ -1,7 +1,7 @@
 CC=clang
 CFLAGS=-Wall -Wextra -Wpedantic -std=c99
 LIBS=-lSDL2 -lSDL2_image -lGL -lm
-OBJECTS=main.o model.o util.o
+OBJECTS=main.o model.o util.o game.o render.o
 
 .PHONY: run
 run: planegame

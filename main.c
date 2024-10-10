@@ -1,3 +1,4 @@
+#include "game.h"
 #include "model.h"
 #include <GLES3/gl32.h>
 #include <SDL2/SDL.h>
@@ -39,10 +40,9 @@ int main(void) {
 	SDL_GetWindowSize(window, &w, &h);
 	glViewport(0, 0, w, h);
 
-	const struct model *monkey;
-	err = getmodel(MODEL_MONKEY, &monkey);
-	if (err)
-		errx(1, "getmodel: %d", err);
+	struct game game;
+	if ((err = game_init(&game)))
+		errx(1, "game_init: %d", err);
 
 	glClearColor(0.157, 0.173, 0.204, 1.0);
 	for (;;) {
@@ -54,10 +54,8 @@ int main(void) {
 		}
 
 		glClear(GL_COLOR_BUFFER_BIT);
-
-		model_bind(monkey);
-		glDrawArrays(GL_TRIANGLES, 0, monkey->nverts);
-
+		if ((err = render(&game)))
+			errx(1, "render: %d", err);
 		SDL_GL_SwapWindow(window);
 	}
 
